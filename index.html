@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>GPS Speedo & Clock</title>
+    <title>GPS Speedo & Location</title>
     <style>
         :root {
             --neon: #03e9f4;
@@ -21,56 +21,61 @@
 
         body.hud-mode { transform: scaleX(-1); }
 
-        /* 상단 시계 영역 */
         .header-clock {
-            padding: 20px; text-align: center;
+            padding: 15px; text-align: center;
             border-bottom: 1px solid #222;
         }
         #current-time {
-            font-size: 24px; font-weight: 300; letter-spacing: 2px; color: #aaa;
+            font-size: 22px; font-weight: 300; letter-spacing: 2px; color: #aaa;
         }
 
         .container {
             flex: 1; display: flex; flex-direction: column;
             justify-content: center; align-items: center;
-            padding: 20px; gap: 20px;
+            padding: 15px; gap: 15px;
         }
 
         .speed-section { text-align: center; }
         .speed-val { 
-            font-size: clamp(120px, 45vw, 320px); 
+            font-size: clamp(100px, 40vw, 280px); 
             font-weight: 900; line-height: 0.8; margin: 0;
             font-variant-numeric: tabular-nums;
         }
-        .unit { font-size: 14px; color: #666; letter-spacing: 0.3em; margin-top: 15px; display: block; }
+        .unit { font-size: 14px; color: #666; letter-spacing: 0.3em; margin-top: 10px; display: block; }
 
+        /* 정보 그리드 (위치 정보 추가로 3칸으로 확장) */
         .info-grid {
             display: grid; grid-template-columns: 1fr 1fr;
-            width: 100%; max-width: 500px; gap: 15px;
+            width: 100%; max-width: 500px; gap: 10px;
         }
         .info-box {
-            background: var(--card); padding: 15px; border-radius: 15px;
+            background: var(--card); padding: 12px; border-radius: 12px;
             text-align: center; border: 1px solid #222;
         }
-        .info-label { display: block; font-size: 10px; color: var(--neon); margin-bottom: 5px; text-transform: uppercase; }
-        .info-data { font-size: 18px; font-weight: 700; }
+        .full-width { grid-column: span 2; cursor: pointer; transition: 0.2s; }
+        .full-width:active { background: #222; }
+
+        .info-label { display: block; font-size: 10px; color: var(--neon); margin-bottom: 3px; text-transform: uppercase; }
+        .info-data { font-size: 16px; font-weight: 700; color: #fff; }
+        .info-data.location { font-size: 13px; color: #03e9f4; text-decoration: underline; }
 
         .controls {
-            display: flex; padding: 20px; gap: 10px;
+            display: flex; padding: 15px; gap: 10px;
             background: rgba(15, 15, 15, 0.9);
         }
         button {
-            flex: 1; padding: 18px; border-radius: 15px; border: none;
-            background: #222; color: #fff; font-weight: bold; font-size: 16px; cursor: pointer;
+            flex: 1; padding: 16px; border-radius: 12px; border: none;
+            background: #222; color: #fff; font-weight: bold; font-size: 15px; cursor: pointer;
         }
         button.active { background: var(--neon); color: #000; }
 
-        /* 가로 모드 최적화 */
+        /* 가로 모드 레이아웃 */
         @media (orientation: landscape) {
-            .container { flex-direction: row; gap: 40px; }
-            .info-grid { grid-template-columns: 1fr; width: 180px; }
-            .speed-val { font-size: 40vh; }
-            .header-clock { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); border: none; }
+            .container { flex-direction: row; gap: 30px; }
+            .info-grid { grid-template-columns: 1fr; width: 220px; }
+            .full-width { grid-column: span 1; }
+            .speed-val { font-size: 45vh; }
+            .header-clock { position: absolute; top: 5px; width: 100%; border: none; }
         }
     </style>
 </head>
@@ -92,8 +97,12 @@
                 <strong class="info-data" id="acc">-</strong><small> m</small>
             </div>
             <div class="info-box">
-                <span class="info-label">GPS Status</span>
+                <span class="info-label">Status</span>
                 <strong class="info-data" id="status">OFF</strong>
+            </div>
+            <div class="info-box full-width" id="location-box">
+                <span class="info-label">Current Location (Click for Map)</span>
+                <strong class="info-data location" id="coords">Waiting for GPS...</strong>
             </div>
         </div>
     </div>
@@ -104,24 +113,33 @@
     </div>
 
     <script>
-        // 시계 업데이트 함수
+        // 시계 로직
         function updateTime() {
             const now = new Date();
-            const hours = String(now.getHours()).padStart(2, '0');
-            const minutes = String(now.getMinutes()).padStart(2, '0');
-            const seconds = String(now.getSeconds()).padStart(2, '0');
-            document.getElementById('current-time').innerText = `${hours}:${minutes}:${seconds}`;
+            document.getElementById('current-time').innerText = now.toLocaleTimeString('ko-KR', { hour12: false });
         }
         setInterval(updateTime, 1000);
-        updateTime(); // 즉시 실행
+        updateTime();
 
         // GPS 로직
         let watchId = null;
+        let currentLat = 0;
+        let currentLon = 0;
+
         const speedEl = document.getElementById('speed');
         const accEl = document.getElementById('acc');
         const statusEl = document.getElementById('status');
+        const coordsEl = document.getElementById('coords');
         const startBtn = document.getElementById('startBtn');
         const hudBtn = document.getElementById('hudBtn');
+
+        // 좌표 클릭 시 구글 지도로 이동
+        document.getElementById('location-box').onclick = () => {
+            if (currentLat !== 0) {
+                const url = `https://www.google.com/maps?q=${currentLat},${currentLon}`;
+                window.open(url, '_blank');
+            }
+        };
 
         hudBtn.onclick = () => {
             document.body.classList.toggle('hud-mode');
@@ -138,11 +156,16 @@
 
                 watchId = navigator.geolocation.watchPosition((pos) => {
                     const kmh = pos.coords.speed ? Math.round(pos.coords.speed * 3.6) : 0;
+                    currentLat = pos.coords.latitude;
+                    currentLon = pos.coords.longitude;
+
                     speedEl.innerText = kmh;
                     accEl.innerText = Math.round(pos.coords.accuracy);
                     statusEl.innerText = "ACTIVE";
+                    coordsEl.innerText = `${currentLat.toFixed(5)}, ${currentLon.toFixed(5)}`;
                 }, (err) => {
                     statusEl.innerText = "ERROR";
+                    coordsEl.innerText = "Check Permissions";
                 }, { enableHighAccuracy: true });
             } else {
                 navigator.geolocation.clearWatch(watchId);
@@ -151,6 +174,7 @@
                 startBtn.classList.remove('active');
                 statusEl.innerText = "OFF";
                 speedEl.innerText = "0";
+                coordsEl.innerText = "Waiting for GPS...";
             }
         };
     </script>
