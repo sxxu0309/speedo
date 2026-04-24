@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Professional GPS Dashboard</title>
+    <title>Smart Road Dashboard</title>
     <style>
-        :root { --neon: #03e9f4; --bg: #000; --card: #161616; --accent: #ff3b30; }
+        :root { --neon: #03e9f4; --bg: #000; --card: #161616; --danger: #ff3b30; --road-yellow: #ffd700; }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body { 
             margin: 0; background: var(--bg); color: #fff; 
@@ -13,40 +13,43 @@
             display: flex; flex-direction: column; transition: 0.3s; overflow: hidden;
         }
         body.hud-mode { transform: scaleX(-1); }
+        body.overspeed { background: #200; }
 
-        .header-clock { padding: 15px; text-align: center; border-bottom: 1px solid #222; }
-        #current-time { font-size: 22px; font-weight: 300; color: #aaa; }
+        .header-clock { padding: 12px; text-align: center; border-bottom: 1px solid #222; display: flex; justify-content: space-around; }
+        .head-info { font-size: 16px; color: #888; letter-spacing: 1px; }
 
-        .container { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 15px; gap: 15px; }
-        .speed-val { font-size: clamp(100px, 45vw, 280px); font-weight: 900; line-height: 0.8; margin: 0; }
-        .unit { font-size: 14px; color: #666; letter-spacing: 0.3em; margin-top: 10px; display: block; }
+        .container { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 10px; gap: 10px; }
+        .speed-val { font-size: clamp(110px, 48vw, 300px); font-weight: 900; line-height: 0.8; margin: 0; transition: 0.2s; }
+        .overspeed .speed-val { color: var(--danger); text-shadow: 0 0 30px var(--danger); }
+        .unit { font-size: 14px; color: #555; letter-spacing: 0.3em; margin-top: 10px; display: block; }
 
-        .info-grid { display: grid; grid-template-columns: 1fr 1fr; width: 100%; max-width: 600px; gap: 10px; }
-        .info-box { background: var(--card); padding: 12px; border-radius: 12px; text-align: center; border: 1px solid #222; }
-        .full-width { grid-column: span 2; min-height: 70px; display: flex; flex-direction: column; justify-content: center; border-color: var(--neon); }
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; width: 100%; max-width: 650px; gap: 8px; }
+        .info-box { background: var(--card); padding: 12px; border-radius: 12px; text-align: center; border: 1px solid #222; display: flex; flex-direction: column; justify-content: center; }
+        .full-width { grid-column: span 2; min-height: 80px; border-color: #333; }
 
-        .info-label { display: block; font-size: 10px; color: var(--neon); margin-bottom: 3px; text-transform: uppercase; letter-spacing: 1px; }
-        .info-data { font-size: 16px; font-weight: 700; }
-        #address { font-size: 14px; color: #fff; line-height: 1.4; word-break: keep-all; padding: 0 10px; }
-        #top-speed { color: var(--accent); }
+        .info-label { display: block; font-size: 9px; color: var(--neon); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 1px; }
+        .info-data { font-size: 17px; font-weight: 700; }
+        
+        /* 도로 정보 디자인 */
+        #address { font-size: 16px; color: #fff; margin-bottom: 5px; font-weight: 600; }
+        #road-ref { font-size: 14px; color: var(--road-yellow); font-weight: 800; background: rgba(255, 215, 0, 0.1); padding: 2px 10px; border-radius: 5px; display: inline-block; }
 
-        .controls { display: flex; padding: 15px; gap: 10px; background: rgba(15, 15, 15, 0.9); }
-        button { flex: 1; padding: 16px; border-radius: 12px; border: none; background: #222; color: #fff; font-weight: bold; cursor: pointer; font-size: 14px; }
-        button.active { background: var(--neon); color: #000; box-shadow: 0 0 15px rgba(3, 233, 244, 0.4); }
+        .controls { display: flex; padding: 15px; gap: 10px; background: rgba(10, 10, 10, 0.9); }
+        button { flex: 1; padding: 16px; border-radius: 12px; border: none; background: #222; color: #fff; font-weight: bold; cursor: pointer; }
+        button.active { background: var(--neon); color: #000; }
 
         @media (orientation: landscape) {
-            .container { flex-direction: row; gap: 20px; }
-            .info-grid { grid-template-columns: 1fr 1fr; width: 320px; }
-            .full-width { grid-column: span 2; }
-            .speed-val { font-size: 45vh; }
-            .header-clock { position: absolute; top: 5px; width: 100%; border: none; }
+            .container { flex-direction: row; padding: 5px; }
+            .info-grid { grid-template-columns: 1fr 1fr; width: 340px; }
+            .speed-val { font-size: 55vh; }
         }
     </style>
 </head>
 <body>
 
     <div class="header-clock">
-        <div id="current-time">00:00:00</div>
+        <div class="head-info" id="current-time">00:00:00</div>
+        <div class="head-info" id="trip-time">00:00</div>
     </div>
 
     <div class="container">
@@ -57,106 +60,105 @@
 
         <div class="info-grid">
             <div class="info-box">
-                <span class="info-label">Top Speed</span>
-                <strong class="info-data" id="top-speed">0</strong><small> km/h</small>
+                <span class="info-label">Direction</span>
+                <strong class="info-data" id="dir">-</strong>
             </div>
             <div class="info-box">
                 <span class="info-label">Altitude</span>
-                <strong class="info-data" id="alt">-</strong><small> m</small>
-            </div>
-            <div class="info-box">
-                <span class="info-label">Accuracy</span>
-                <strong class="info-data" id="acc">-</strong><small> m</small>
-            </div>
-            <div class="info-box">
-                <span class="info-label">Status</span>
-                <strong class="info-data" id="status">OFF</strong>
+                <strong class="info-data" id="alt">-</strong>
             </div>
             <div class="info-box full-width">
-                <span class="info-label">Current Address (Detailed)</span>
-                <strong id="address">GPS를 시작해 주세요</strong>
+                <span class="info-label">Current Road Info</span>
+                <div id="address">GPS 시작 대기 중</div>
+                <div id="road-ref">-</div>
             </div>
         </div>
     </div>
 
     <div class="controls">
-        <button id="startBtn">START SYSTEM</button>
-        <button id="hudBtn">HUD MODE</button>
+        <button id="startBtn">START TRIP</button>
+        <button id="hudBtn">HUD</button>
     </div>
 
     <script>
-        function updateTime() {
-            document.getElementById('current-time').innerText = new Date().toLocaleTimeString('ko-KR', { hour12: false });
+        let watchId = null, startTime = null, lastAddrUpdate = 0;
+        const speedLimit = 60;
+
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('current-time').innerText = now.toLocaleTimeString('ko-KR', { hour12: false });
+            if (startTime) {
+                const diff = Math.floor((now - startTime) / 1000);
+                const m = String(Math.floor(diff / 60)).padStart(2, '0');
+                const s = String(diff % 60).padStart(2, '0');
+                document.getElementById('trip-time').innerText = `${m}:${s}`;
+            }
         }
-        setInterval(updateTime, 1000);
-        updateTime();
+        setInterval(updateClock, 1000);
 
-        let watchId = null;
-        let maxSpeed = 0;
-        let lastAddrUpdate = 0;
+        function getDirection(heading) {
+            if (heading === null || isNaN(heading)) return "-";
+            const directions = ['북', '북동', '동', '남동', '남', '남서', '서', '북서'];
+            return directions[Math.round(heading / 45) % 8];
+        }
 
-        const speedEl = document.getElementById('speed');
-        const topSpeedEl = document.getElementById('top-speed');
-        const altEl = document.getElementById('alt');
-        const accEl = document.getElementById('acc');
-        const statusEl = document.getElementById('status');
-        const addrEl = document.getElementById('address');
-        const startBtn = document.getElementById('startBtn');
-
-        async function fetchDetailedAddress(lat, lon) {
-            const now = Date.now();
-            if (now - lastAddrUpdate < 8000) return; // 8초 주기로 업데이트
-            
+        async function fetchRoadInfo(lat, lon) {
+            if (Date.now() - lastAddrUpdate < 7000) return; // 7초마다 갱신
             try {
                 const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&addressdetails=1`, {
                     headers: { 'Accept-Language': 'ko-KR' }
                 });
-                const data = await res.json();
-                if (data.address) {
-                    const a = data.address;
-                    // 도로명(road)과 건물번호(house_number)를 포함한 상세 주소 조합
-                    const city = a.city || a.province || a.metropolitan || "";
-                    const dist = a.borough || a.suburb || a.district || "";
+                const d = await res.json();
+                if (d.address) {
+                    const a = d.address;
+                    // 1. 주소 조합 (예: 경상북도 울진군 동해대로)
+                    const region = a.province || a.city || a.metropolitan || "";
+                    const city = a.city_district || a.county || a.city || "";
                     const road = a.road || "";
-                    const num = a.house_number ? ` ${a.house_number}` : "";
+                    const detailAddr = `${region} ${city} ${road}`.trim();
+                    document.getElementById('address').innerText = detailAddr;
+
+                    // 2. 도로 번호 추출 (ref 필드 활용)
+                    // Nominatim의 display_name이나 extags에서 국도/지방도 번호를 파싱
+                    let roadRef = "일반도로";
+                    if (d.display_name.includes("국도")) {
+                        const match = d.display_name.match(/(\d+번\s?국도)/);
+                        if (match) roadRef = match[0];
+                    } else if (a.highway) {
+                        roadRef = a.highway; // 고속도로명 등
+                    }
                     
-                    addrEl.innerText = `${city} ${dist} ${road}${num}`.trim() || data.display_name;
-                    lastAddrUpdate = now;
+                    // ref 값이 숫자로 오는 경우(예: 7) 처리
+                    if (d.address.ref) {
+                        const ref = d.address.ref;
+                        if (!isNaN(ref)) {
+                            roadRef = ref + "번 도로";
+                            if (road.includes("대로") || road.includes("로")) roadRef = ref + "번 국도/지방도";
+                        } else {
+                            roadRef = ref;
+                        }
+                    }
+                    document.getElementById('road-ref').innerText = roadRef;
+                    lastAddrUpdate = Date.now();
                 }
-            } catch (e) { console.error(e); }
+            } catch (e) {}
         }
 
-        startBtn.onclick = () => {
+        document.getElementById('startBtn').onclick = function() {
             if (watchId === null) {
-                if (!navigator.geolocation) return alert("GPS Not Supported");
-                startBtn.innerText = "SHUTDOWN";
-                startBtn.classList.add('active');
-                statusEl.innerText = "CONNECTING";
-                addrEl.innerText = "상세 위치 추적 중...";
-
+                startTime = new Date();
+                this.innerText = "END TRIP";
+                this.classList.add('active');
                 watchId = navigator.geolocation.watchPosition((pos) => {
-                    const kmh = pos.coords.speed ? Math.round(pos.coords.speed * 3.6) : 0;
-                    
-                    // 최고 속도 갱신
-                    if (kmh > maxSpeed) {
-                        maxSpeed = kmh;
-                        topSpeedEl.innerText = maxSpeed;
-                    }
-
-                    speedEl.innerText = kmh;
-                    altEl.innerText = pos.coords.altitude ? Math.round(pos.coords.altitude) : "-";
-                    accEl.innerText = Math.round(pos.coords.accuracy);
-                    statusEl.innerText = "ACTIVE";
-                    
-                    fetchDetailedAddress(pos.coords.latitude, pos.coords.longitude);
+                    const kmh = Math.round((pos.coords.speed || 0) * 3.6);
+                    document.body.classList.toggle('overspeed', kmh > speedLimit);
+                    document.getElementById('speed').innerText = kmh;
+                    document.getElementById('alt').innerText = pos.coords.altitude ? Math.round(pos.coords.altitude) + "m" : "-";
+                    document.getElementById('dir').innerText = getDirection(pos.coords.heading);
+                    fetchRoadInfo(pos.coords.latitude, pos.coords.longitude);
                 }, null, { enableHighAccuracy: true });
             } else {
-                navigator.geolocation.clearWatch(watchId);
-                watchId = null;
-                startBtn.innerText = "START SYSTEM";
-                startBtn.classList.remove('active');
-                statusEl.innerText = "OFF";
-                speedEl.innerText = "0";
+                location.reload();
             }
         };
 
